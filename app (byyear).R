@@ -1,8 +1,17 @@
+library(shiny)
+library(dplyr)
 library(robust)
 library(MASS)
 library(robustbase)
 library(modi)
 library(xlsx)
+
+
+byyear<-function(year){
+  tempy<-temp[temp$year==year,-2]
+  pd<-merge(tempy, notemp, by = "country")
+  return(pd)
+}
 
 classify=function(pd){
   n=nrow(pd)
@@ -18,14 +27,14 @@ classify=function(pd){
     else {pdq=cbind(pdq, pd[,i])}
     i=i+1
   }
-  return(list(pdq, pdb,pdc))}#splits dataframe by type of variable
+  return(list(pdq, pdb,pdc))}
 
 varg=function(mat){
   n=ncol(mat)
   v=sum(mat)/(2*n^2)
   mat1=mat/v
   return(mat1)
-}#puts geom. var. equal 1
+}
 
 gower=function(pd){
   n=nrow(pd)
@@ -47,20 +56,23 @@ gower=function(pd){
     }}
   D2=1-s
   D2=varg(D2)#geometric variability 1
-  return(D2)}#computes gower
+  return(D2)}
 
-mahal=function(pd){
-  cov1=covMcd(pd)$cov
-  n=nrow(pd)
-  D2=matrix(ncol=n, nrow = n)
-  pd1=pd
-  for (i in 1: ncol(pd)){
-    pd1[,i][is.na(pd[, i])]<-mean(pd1[, i], na.rm = T)
+mahal<-function(pd){
+  pd1=pd[,c(4:ncol(pd))]
+  cov1=covMcd(pd1)$cov
+  n1=nrow(pd1)
+  D2=matrix(ncol=n1, nrow = n1)
+  for (i in 1: ncol(pd1)){
+    pd1[,i][is.na(pd1[, i])]<-median(pd1[, i], na.rm = T)
   }
-  for (i in 1:n){
+  
+  for (i in 1:n1){
     D2[i,] <- mahalanobis(pd1, center=as.numeric(pd1[i,]), cov=cov1, pairwise=TRUE)
-    }
-  return(D2)}#computes mahalannobis
+  }
+  D2<-varg(D2)
+  return(D2)
+}
 
 jacc=function(pd){
   n=nrow(pd)
@@ -79,7 +91,7 @@ jacc=function(pd){
     }}
   D2=1-s
   return(D2)
-}#jaccard similarities
+}
 
 coin=function(pd){
   p=ncol(pd)
@@ -95,7 +107,7 @@ coin=function(pd){
     }}
   D2=1-s
   return(D2)
-}#coincidence similarity
+}
 
 robustdist=function(pd){
   pdq=as.data.frame(classify(pd)[1])
@@ -110,8 +122,7 @@ robustdist=function(pd){
   distc=coin(pdc)
   D2c=varg(distc)
   D2=D2q+D2c+D2b
-  return(D2)}#robust distance combining the three functions above
-
+  return(D2)}
 
 mds<-function(pd, p){#If p=0 gower if p=1 robust
   n=nrow(pd)
@@ -130,28 +141,22 @@ mds<-function(pd, p){#If p=0 gower if p=1 robust
   A=diag(eigenv,n,n)
   U=eigen(B)$vectors
   X=U%*%(A^(0.5))
-  coord=X[,c(1,2)]
-  continents=pd$continent
-  #we multiply by -1 to turn around the figure
-  if (coord[25,1]<=0){coord[,1]=coord[,1]*(-1)}
-  if (coord[25,2]<=0){coord[,2]=coord[,2]*(-1)}
-  #par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
-  opar <- par(no.readonly = TRUE)
   
-  # Cambiar los márgenes del gráfico (el cuarto es el margen derecho)
-  par(mar =c(5.1, 4.1, 4.1, 7.1))
-  plot(coord[,1],coord[,2], xlab="", ylab="", pch=20, col=continents)
-  text(coord[c(1,23,25,26,43,49),2] ~coord[c(1,23,25,26,43,49),1], col=c(5,1,"black","red","red",3),offset = 0.6, labels=pd[c(1,23,25,26,43,49),1], cex= 0.7
-       , pos=2)
-}#mds algorithm for representation
+  coord=X[,c(1,2)]
+  if (coord[21,1]>=coord[48,1]){coord[,1]=coord[,1]*(-1)}
+  if (coord[42,2]<=0){coord[,2]=coord[,2]*(-1)}
+  continents<-pd[,"continent"]
+  plot(coord[,1],coord[,2], xlab="", ylab="", pch=20, col=continents, ylim=c(-2,2.3), xlim=c(-5.1,5.2))
+  text(coord[c(21,23,25,42,48),2] ~coord[c(21,23,25,42,48),1], col=c(2,1,1,2,3),offset = 0.6, labels=pd[c(21,23,25,42,48),1], cex= 0.7, pos=3)
+}
 
-####data######
 
-#setwd("C:/Users/lucia/Downloads/TFM/data")
+setwd("C:/Users/lucia/Downloads/TFM/data")
 temp<-read.xlsx("temp1.xlsx",1, header=TRUE)
 notemp<-read.xlsx("notemp1.xlsx",1, header=TRUE)
 temp<-temp[,-1]
 notemp<-notemp[,-1]
+temp<-temp[which(temp[,1]!="Montenegro"),]
 notemp$income<-as.factor(notemp$income)
 notemp$law<-as.factor(notemp$law)
 notemp$drinking_awareness=as.factor(notemp$drinking_awareness)
@@ -159,17 +164,21 @@ notemp$UHC_legislation=as.factor(notemp$UHC_legislation)
 notemp$violence_treatment=as.factor(notemp$violence_treatment)
 notemp$policy_plan<-as.factor(notemp$policy_plan)
 notemp$continent<-as.factor(notemp$continent)
+notemp$country<-as.factor(notemp$country)
+temp$country<-as.factor(temp$country)
 
-###MDS representation for static ####
-mds(notemp,1)
-mds(notemp,0)
 
-####MDS representation by year###
+ui <- fluidPage(
+    h2("Robust representation by year"),
+    plotOutput("plot"),
+    sliderInput("n", "Year", 2002, 2018, 2008)
+)
 
-#we use this function to split the time series by year and add them with the static variables
 
-byyear<-function(year){
-  tempy<-temp[temp$year==year,-2]
-  pd<-merge(tempy, notemp, by = "country")
-  return(pd)
-}
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    mds(byyear(input$n),1)
+  })
+  }
+
+shinyApp(ui = ui, server = server)
